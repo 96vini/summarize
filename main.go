@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gen2brain/go-fitz" // PDF processing
 	"github.com/joho/godotenv"
+	"github.com/ledongthuc/pdf"
 	openai "github.com/sashabaranov/go-openai" // OpenAI SDK
 )
 
@@ -58,7 +58,7 @@ func loadConfig() {
 	}
 
 	// Validação das variáveis
-	requiredVars := []string{"OPENAI_API_KEY", "RESULTS_FILE", "PDFS_DIR"}
+	requiredVars := []string{"API_OPENAI_KEY", "RESULTS_FILE", "PDFS_DIR"}
 	for _, v := range requiredVars {
 		if os.Getenv(v) == "" {
 			log.Fatalf("Variável %s não encontrada no .env", v)
@@ -130,7 +130,7 @@ func main() {
 // PROCESSING FUNCTIONS
 // ==============================
 func processPDFGroup(files []string) (string, []ArticleSummary, string, error) {
-	client := openai.NewClient(os.Getenv("OPENAI_API_KEY"))
+	client := openai.NewClient(os.Getenv("API_OPENAI_KEY"))
 
 	// First pass: Extract subject from filenames
 	subject := determineSubject(files)
@@ -272,15 +272,21 @@ func commonPrefixLength(a, b string) int {
 }
 
 func extractTextFromPDF(path string) (string, error) {
-	doc, err := fitz.New(path)
+	f, r, err := pdf.Open(path)
 	if err != nil {
 		return "", err
 	}
-	defer doc.Close()
+	defer f.Close()
 
 	var textBuilder strings.Builder
-	for i := 0; i < doc.NumPage(); i++ {
-		pageText, err := doc.Text(i)
+
+	totalPages := r.NumPage()
+	for i := 1; i <= totalPages; i++ {
+		p := r.Page(i)
+		if p.V.IsNull() {
+			continue
+		}
+		pageText, err := p.GetPlainText(nil)
 		if err != nil {
 			return "", err
 		}
